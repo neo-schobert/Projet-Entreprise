@@ -25,7 +25,7 @@
             <meta name="viewport" content="width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
             <style>
-                #map_8804be4cec501d2959a48ae2f7912dc9 {
+                #map_57ab5cd8a5277be6cf2d7683f2b9cba7 {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -60,15 +60,15 @@
 <body>
     
     
-            <div class="folium-map" id="map_8804be4cec501d2959a48ae2f7912dc9" ></div>
+            <div class="folium-map" id="map_57ab5cd8a5277be6cf2d7683f2b9cba7" ></div>
         
     <a href='#' id='export'>Export</a>
 </body>
 <script>
     
     
-            var map_8804be4cec501d2959a48ae2f7912dc9 = L.map(
-                "map_8804be4cec501d2959a48ae2f7912dc9",
+            var map_57ab5cd8a5277be6cf2d7683f2b9cba7 = L.map(
+                "map_57ab5cd8a5277be6cf2d7683f2b9cba7",
                 {
                     center: [48.8566, 2.3522],
                     crs: L.CRS.EPSG3857,
@@ -82,13 +82,13 @@
 
         
     
-            var tile_layer_a29d10dc29e71b1444127419a09fc998 = L.tileLayer(
+            var tile_layer_9447560a482576a645f8369701d2af5a = L.tileLayer(
                 "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 {"attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors", "detectRetina": false, "maxNativeZoom": 19, "maxZoom": 19, "minZoom": 0, "noWrap": false, "opacity": 1, "subdomains": "abc", "tms": false}
             );
         
     
-            tile_layer_a29d10dc29e71b1444127419a09fc998.addTo(map_8804be4cec501d2959a48ae2f7912dc9);
+            tile_layer_9447560a482576a645f8369701d2af5a.addTo(map_57ab5cd8a5277be6cf2d7683f2b9cba7);
         
     
             var options = {
@@ -97,14 +97,14 @@
               edit: {},
             }
             // FeatureGroup is to store editable layers.
-            var drawnItems_draw_control_6c3c007f1a6688b13233a1b016490be6 = new L.featureGroup().addTo(
-                map_8804be4cec501d2959a48ae2f7912dc9
+            var drawnItems_draw_control_0fcff1d08d65bef7697486aa3784e67f = new L.featureGroup().addTo(
+                map_57ab5cd8a5277be6cf2d7683f2b9cba7
             );
-            options.edit.featureGroup = drawnItems_draw_control_6c3c007f1a6688b13233a1b016490be6;
-            var draw_control_6c3c007f1a6688b13233a1b016490be6 = new L.Control.Draw(
+            options.edit.featureGroup = drawnItems_draw_control_0fcff1d08d65bef7697486aa3784e67f;
+            var draw_control_0fcff1d08d65bef7697486aa3784e67f = new L.Control.Draw(
                 options
-            ).addTo( map_8804be4cec501d2959a48ae2f7912dc9 );
-            map_8804be4cec501d2959a48ae2f7912dc9.on(L.Draw.Event.CREATED, function(e) {
+            ).addTo( map_57ab5cd8a5277be6cf2d7683f2b9cba7 );
+            map_57ab5cd8a5277be6cf2d7683f2b9cba7.on(L.Draw.Event.CREATED, function(e) {
                 var layer = e.layer,
                     type = e.layerType;
                 var coords = JSON.stringify(layer.toGeoJSON());
@@ -112,14 +112,14 @@
                     alert(coords);
                     console.log(coords);
                 });
-                drawnItems_draw_control_6c3c007f1a6688b13233a1b016490be6.addLayer(layer);
+                drawnItems_draw_control_0fcff1d08d65bef7697486aa3784e67f.addLayer(layer);
              });
-            map_8804be4cec501d2959a48ae2f7912dc9.on('draw:created', function(e) {
-                drawnItems_draw_control_6c3c007f1a6688b13233a1b016490be6.addLayer(e.layer);
+            map_57ab5cd8a5277be6cf2d7683f2b9cba7.on('draw:created', function(e) {
+                drawnItems_draw_control_0fcff1d08d65bef7697486aa3784e67f.addLayer(e.layer);
             });
             
             document.getElementById('export').onclick = function(e) {
-                var data = drawnItems_draw_control_6c3c007f1a6688b13233a1b016490be6.toGeoJSON();
+                var data = drawnItems_draw_control_0fcff1d08d65bef7697486aa3784e67f.toGeoJSON();
                 var convertedData = 'text/json;charset=utf-8,'
                     + encodeURIComponent(JSON.stringify(data));
                 document.getElementById('export').setAttribute(

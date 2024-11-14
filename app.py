@@ -9,10 +9,11 @@ from sentinelhub import SHConfig, SentinelHubRequest, MimeType, CRS, BBox, DataC
 from oauthlib.oauth2 import BackendApplicationClient
 from requests_oauthlib import OAuth2Session
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from esa_snappy import ProductIO, GPF, HashMap
 from tkcalendar import DateEntry
 from tkinter import PhotoImage
+from shapely.geometry import shape, Polygon
 
 
 def afficher_carte():
@@ -95,17 +96,18 @@ def telecharger_donnees():
 
     intervalle_jours = total_days / \
         (nombre_images - 1) if nombre_images > 1 else total_days
-
     date_courante = date_debut_obj
+
+    images_paths = []
+    output_paths = []
+    images = []
 
     for image_index in range(nombre_images):
         if date_courante > date_fin_obj:
             break
         date_fin_intervalle = date_courante
 
-        # Pour chaque `feature_index`, créer un dossier dans le dossier d'enregistrement
         for feature_index, feature in enumerate(geojson_data['features']):
-            # Créer un dossier pour le feature_index
             dossier_feature = os.path.join(
                 dossier_enregistrement, f"Zone_{feature_index + 1}")
             os.makedirs(dossier_feature, exist_ok=True)
@@ -126,23 +128,34 @@ def telecharger_donnees():
             request = SentinelHubRequest(
                 data_folder=None,
                 evalscript="""//VERSION=3
-                function setup() {
-                    return {
-                        input: ["VV", "VH"],
-                        output: { bands: 1 }
-                    };
-                }
+                // function setup() {
+                //     return {
+                //         input: ["VV", "VH"],
+                //         output: { bands: 1 }
+                //     };
+                // }
 
-                function evaluatePixel(sample) {
-                    let intensity = (sample.VV + sample.VH) / 2.0;
-                    return [Math.sqrt(intensity)];
-                }
+                // function evaluatePixel(sample) {
+                //     return [sample.VV];
+                // }
+                function setup() {
+  return {
+    input: ["VV","VH", "dataMask"],
+    output: { bands: 4 }
+  };
+}
+
+function evaluatePixel(sample) {
+  
+  return [2.5 * sample.VV, 2.5 * sample.VH, 2.5 * sample.VV, sample.dataMask];
+}
+
                 """,
                 input_data=[SentinelHubRequest.input_data(
                     data_collection=DataCollection.SENTINEL1.define_from(
                         "s1", service_url=config.sh_base_url),
-                    time_interval=(date_courante.strftime(
-                        '%Y-%m-%d'), (date_courante + timedelta(days=intervalle_jours)).strftime('%Y-%m-%d'))
+                    time_interval=(date_courante.strftime('%Y-%m-%d'),
+                                   (date_courante + timedelta(days=intervalle_jours)).strftime('%Y-%m-%d'))
                 )],
                 responses=[SentinelHubRequest.output_response(
                     'default', MimeType.TIFF)],
@@ -162,12 +175,20 @@ def telecharger_donnees():
                                      (array.max() - array.min())).astype(np.uint8)
 
                         image = Image.fromarray(array)
+                        mask = create_aoi_mask(geometry, image.size, bbox)
+                        mask_image = Image.fromarray(mask * 255)
+                        image.putalpha(mask_image)
                         image_filename = f"{date_courante.strftime('%Y-%m-%d')}.tiff"
                         chemin_image = os.path.join(
                             dossier_feature, image_filename).replace("\\", "/")
                         image.save(chemin_image)
+                        print(f"Image téléchargée : {chemin_image}")
+                        images.append(image)
 
-                        print(f"Image enregistrée : {chemin_image}")
+                        images_paths.append(chemin_image)
+                        chemin_image_filtre = chemin_image.replace(
+                            ".tiff", "_traitée.tiff")
+                        output_paths.append(chemin_image_filtre)
 
             except Exception as e:
                 print(f"Erreur lors du téléchargement des données : {e}")
@@ -176,42 +197,102 @@ def telecharger_donnees():
 
         date_courante += timedelta(days=intervalle_jours)
 
-
-def appliquer_filtre_speckle(image_path, output_path):
-    try:
-        product = ProductIO.readProduct(image_path)
-        parameters = HashMap()
-        parameters.put('filter', 'Lee')
-        speckle_filtered_product = GPF.createProduct(
-            'Speckle-Filter', parameters, product)
-        ProductIO.writeProduct(speckle_filtered_product,
-                               output_path, 'GeoTIFF')
-        messagebox.showinfo(
-            "Succès", f"Filtrage speckle appliqué avec succès ! Fichier enregistré : {output_path}")
-        print(f"Image filtrée enregistrée : {output_path}")
-    except Exception as e:
-        messagebox.showerror(
-            "Erreur", f"Erreur lors du filtrage speckle : {e}")
+    # Appliquer les filtres sur toutes les images téléchargées
+    # appliquer_filtres(images_paths, output_paths)
 
 
-def traiter_image():
-    fichier_sar = filedialog.askopenfilename(
-        title="Sélectionner une image SAR", filetypes=[("Image SAR", "*.tiff")])
-    if not fichier_sar:
-        messagebox.showerror("Erreur", "Aucune image sélectionnée.")
-        return
+# def appliquer_filtres(images_paths, output_paths):
+#     try:
+#         # Charger les images SAR
+#         products = [ProductIO.readProduct(image_path)
+#                     for image_path in images_paths]
 
-    dossier_enregistrement = filedialog.askdirectory(
-        title="Sélectionner le dossier d'enregistrement")
-    if not dossier_enregistrement:
-        messagebox.showerror("Erreur", "Aucun dossier sélectionné.")
-        return
+#         # Étape 1: Calibration (appliquée uniformément sur toutes les images)
+#         parameters = HashMap()
+#         parameters.put('outputSigmaBand', True)
 
-    nom_fichier_filtre = os.path.basename(
-        fichier_sar).replace(".tiff", "_filtre_speckle.tiff")
-    chemin_image_filtre = os.path.join(
-        dossier_enregistrement, nom_fichier_filtre)
-    appliquer_filtre_speckle(fichier_sar, chemin_image_filtre)
+#         calibrated_products = []
+#         for product in products:
+#             calibrated_product = GPF.createProduct(
+#                 'Calibration', parameters, product)
+#             calibrated_products.append(calibrated_product)
+#         print("Calibration appliquée à toutes les images")
+
+#         # Étape 2: Déburst (appliqué après la calibration)
+#         debursted_products = []
+#         for product in calibrated_products:
+#             parameters = HashMap()
+#             debursted_product = GPF.createProduct(
+#                 'TOPSAR-Deburst', parameters, product)
+#             debursted_products.append(debursted_product)
+#         print("Déburst appliqué à toutes les images")
+
+#         # Étape 3: Co-registration en utilisant la première image comme référence
+#         master_product = debursted_products[0]
+#         coregistered_products = [master_product]
+
+#         for slave_product in debursted_products[1:]:
+#             parameters = HashMap()
+#             parameters.put('masterBands', 'Sigma0_VV')
+#             parameters.put('slaveBands', 'Sigma0_VV')
+#             coregistered_product = GPF.createProduct(
+#                 'Back-Geocoding', parameters, [master_product, slave_product])
+#             coregistered_products.append(coregistered_product)
+#         print("Co-registration appliquée à toutes les images")
+
+#         # Étape 4: Filtrage speckle (appliqué après co-registration)
+#         speckle_filtered_products = []
+#         for product in coregistered_products:
+#             parameters = HashMap()
+#             parameters.put('filter', 'Lee')
+#             speckle_filtered_product = GPF.createProduct(
+#                 'Speckle-Filter', parameters, product)
+#             speckle_filtered_products.append(speckle_filtered_product)
+#         print("Filtrage speckle appliqué à toutes les images")
+
+#         # Étape 5: Correction de terrain (Range-Doppler)
+#         final_products = []
+#         for product in speckle_filtered_products:
+#             parameters = HashMap()
+#             parameters.put('demName', 'SRTM 3Sec')
+#             parameters.put('pixelSpacingInMeter', 10.0)
+#             parameters.put('sourceBands', 'Sigma0_VV')
+#             terrain_corrected_product = GPF.createProduct(
+#                 'Terrain-Correction', parameters, product)
+#             final_products.append(terrain_corrected_product)
+#         print("Correction de terrain appliquée à toutes les images")
+
+#         # Enregistrement des produits finaux
+#         for final_product, output_path in zip(final_products, output_paths):
+#             ProductIO.writeProduct(final_product, output_path, 'GeoTIFF')
+#             print(f"Image traitée enregistrée : {output_path}")
+
+#         messagebox.showinfo(
+#             "Succès", "Traitement complet appliqué avec succès !")
+
+#     except Exception as e:
+#         messagebox.showerror(
+#             "Erreur", f"Erreur lors du traitement des images : {e}")
+
+
+# def traiter_image():
+#     fichier_sar = filedialog.askopenfilename(
+#         title="Sélectionner une image SAR", filetypes=[("Image SAR", "*.tiff")])
+#     if not fichier_sar:
+#         messagebox.showerror("Erreur", "Aucune image sélectionnée.")
+#         return
+
+#     dossier_enregistrement = filedialog.askdirectory(
+#         title="Sélectionner le dossier d'enregistrement")
+#     if not dossier_enregistrement:
+#         messagebox.showerror("Erreur", "Aucun dossier sélectionné.")
+#         return
+
+#     nom_fichier_filtre = os.path.basename(
+#         fichier_sar).replace(".tiff", "_filtre_speckle.tiff")
+#     chemin_image_filtre = os.path.join(
+#         dossier_enregistrement, nom_fichier_filtre)
+#     appliquer_filtres(fichier_sar, chemin_image_filtre)
 
 
 def interface_utilisateur():
@@ -300,16 +381,45 @@ def interface_utilisateur():
                             pady=15, sticky=tk.W+tk.E)
 
     # Bouton pour traiter une image SAR
-    bouton_traiter_image = ttk.Button(
-        frame_main, text="Traiter une image SAR", command=traiter_image)
-    bouton_traiter_image.grid(
-        row=7, column=0, columnspan=3, pady=15, sticky=tk.W+tk.E)
+    # bouton_traiter_image = ttk.Button(
+    #     frame_main, text="Traiter une image SAR", command=traiter_image)
+    # bouton_traiter_image.grid(
+    #     row=7, column=0, columnspan=3, pady=15, sticky=tk.W+tk.E)
 
     # Dimensionnement automatique de la fenêtre
     fenetre.update_idletasks()
     # Taille minimale pour éviter des réductions excessives
     fenetre.minsize(800, 600)
     fenetre.mainloop()
+
+
+def create_aoi_mask(geometry, image_size, bbox):
+    """
+    Crée un masque pour recadrer l'image selon l'AOI du GeoJSON.
+    `geometry`: Géométrie de l'AOI sous forme de polygone.
+    `image_size`: Dimensions de l'image (largeur, hauteur).
+    `bbox`: Bounding box (BBox) de l'image.
+    """
+    # Convertir les coordonnées du polygone en coordonnées de pixels
+    poly = shape(geometry)
+    min_x, min_y, max_x, max_y = bbox
+
+    # Taille de l'image en pixels
+    width, height = image_size
+
+    # Créer une image binaire vide
+    mask = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(mask)
+
+    # Redimensionner le polygone aux dimensions de l'image
+    def scale_coords(x, y):
+        return ((x - min_x) / (max_x - min_x) * width,
+                height - (y - min_y) / (max_y - min_y) * height)
+
+    pixel_coords = [scale_coords(x, y) for x, y in poly.exterior.coords]
+    draw.polygon(pixel_coords, fill=1)
+
+    return np.array(mask)
 
 
 # Lancer l'interface utilisateur
