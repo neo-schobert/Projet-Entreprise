@@ -17,6 +17,7 @@ Ce projet détecte la pollution des eaux à partir d'images satellites de Sentin
 git clone https://github.com/votre-repo/outil-analyse-pollution.git
 cd outil-analyse-pollution
 pip install -r requirements.txt
+```
 
 ## Licence
 Ce projet est sous licence MIT.
